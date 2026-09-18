@@ -33,7 +33,8 @@ function Update-ADGroupAllowedMembers {
     $missingMatches = [System.Collections.Generic.List[string]]::new()
     $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-    $membersBefore = @(Get-ADGroupMember -Identity $GroupIdentity |
+    $membersBeforeRaw = @(Get-ADGroupMember -Identity $GroupIdentity)
+    $membersBefore = @($membersBeforeRaw |
         Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
     $simulatedMembersAfter = [System.Collections.Generic.List[object]]::new()
 
@@ -123,7 +124,7 @@ function Update-ADGroupAllowedMembers {
 
     if ($RemoveUsers.IsPresent) {
         $membersToRemove = @(
-            $membersBefore |
+            $membersBeforeRaw |
                 Where-Object {
                     $memberSamAccountName = $_.SamAccountName
 
@@ -147,7 +148,7 @@ function Update-ADGroupAllowedMembers {
         foreach ($memberToRemove in $membersToRemove) {
             if ($PSCmdlet.ShouldProcess($GroupIdentity, "Remove $($memberToRemove.SamAccountName)")) {
                 try {
-                    Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove -Confirm:$false -ErrorAction Stop
+                    Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove.DistinguishedName -Confirm:$false -ErrorAction Stop
                     $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
                 }
                 catch {
