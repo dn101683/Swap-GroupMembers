@@ -223,7 +223,7 @@ function Update-ADGroupAllowedMembers {
 
     if ($RemoveUsers.IsPresent) {
         $membersToRemove = @(
-            $membersBefore |
+            $simulatedMembersAfter |
                 Where-Object {
                     $memberSamAccountName = $_.SamAccountName
 
