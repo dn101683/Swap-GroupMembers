@@ -26,6 +26,44 @@ function Update-ADGroupAllowedMembers {
         $ldapFilterValue
     }
 
+    function Resolve-ADGroupMembers {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Identity
+        )
+
+        $rawMembers = @(Get-ADGroupMember -Identity $Identity)
+        $resolvedMembers = foreach ($rawMember in $rawMembers) {
+            $memberName = $rawMember.Name
+            $memberSamAccountName = $rawMember.SamAccountName
+            $memberDistinguishedName = $rawMember.DistinguishedName
+            $memberObjectClass = $rawMember.ObjectClass
+
+            if ([string]::IsNullOrWhiteSpace($memberSamAccountName) -and -not [string]::IsNullOrWhiteSpace($memberDistinguishedName)) {
+                $resolvedUser = Get-ADUser -Identity $memberDistinguishedName -Properties SamAccountName, Name, DistinguishedName, ObjectClass -ErrorAction SilentlyContinue
+
+                if ($null -ne $resolvedUser) {
+                    $memberName = $resolvedUser.Name
+                    $memberSamAccountName = $resolvedUser.SamAccountName
+                    $memberDistinguishedName = $resolvedUser.DistinguishedName
+                    $memberObjectClass = $resolvedUser.ObjectClass
+                }
+            }
+
+            [pscustomobject]@{
+                Name              = $memberName
+                SamAccountName    = $memberSamAccountName
+                DistinguishedName = $memberDistinguishedName
+                ObjectClass       = $memberObjectClass
+            }
+        }
+
+        [pscustomobject]@{
+            RawMembers      = $rawMembers
+            ResolvedMembers = @($resolvedMembers)
+        }
+    }
+
     $suffix = ".$AllowedMembers"
     $recognizedSuffixes = @('.T1', '.PUAM')
     $isWhatIf = [bool]$WhatIfPreference
@@ -33,9 +71,9 @@ function Update-ADGroupAllowedMembers {
     $missingMatches = [System.Collections.Generic.List[string]]::new()
     $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-    $membersBeforeRaw = @(Get-ADGroupMember -Identity $GroupIdentity)
-    $membersBefore = @($membersBeforeRaw |
-        Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
+    $membersBeforeResult = Resolve-ADGroupMembers -Identity $GroupIdentity
+    $membersBeforeRaw = $membersBeforeResult.RawMembers
+    $membersBefore = $membersBeforeResult.ResolvedMembers
     $simulatedMembersAfter = [System.Collections.Generic.List[object]]::new()
 
     foreach ($member in $membersBefore) {
@@ -180,8 +218,7 @@ function Update-ADGroupAllowedMembers {
         $membersAfter = @($simulatedMembersAfter)
     }
     else {
-        $membersAfter = @(Get-ADGroupMember -Identity $GroupIdentity |
-            Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
+        $membersAfter = (Resolve-ADGroupMembers -Identity $GroupIdentity).ResolvedMembers
     }
 
     [pscustomobject]@{
