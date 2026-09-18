@@ -91,6 +91,20 @@ function Update-ADGroupAllowedMembers {
         }
     }
 
+    function Remove-TrackedMember {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$SamAccountName,
+
+            [Parameter(Mandatory = $true)]
+            [string]$DistinguishedName
+        )
+
+        [void]$currentSamAccountNames.Remove($SamAccountName)
+        [void]$currentMemberDistinguishedNames.Remove($DistinguishedName)
+        Remove-SimulatedMember -SamAccountName $SamAccountName
+    }
+
     $suffix = ".$AllowedMembers"
     $recognizedSuffixes = @('.T1', '.PUAM')
     $isWhatIf = [bool]$WhatIfPreference
@@ -235,7 +249,7 @@ function Update-ADGroupAllowedMembers {
                 try {
                     Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove.DistinguishedName -Confirm:$false -ErrorAction Stop
                     $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
-                    Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
+                    Remove-TrackedMember -SamAccountName $memberToRemove.SamAccountName -DistinguishedName $memberToRemove.DistinguishedName
                 }
                 catch {
                     $actionsTaken.Add("Failed to remove: $($memberToRemove.SamAccountName)")
@@ -243,7 +257,7 @@ function Update-ADGroupAllowedMembers {
             }
             elseif ($isWhatIf) {
                 $actionsTaken.Add("Would remove: $($memberToRemove.SamAccountName)")
-                Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
+                Remove-TrackedMember -SamAccountName $memberToRemove.SamAccountName -DistinguishedName $memberToRemove.DistinguishedName
             }
             else {
                 $actionsTaken.Add("Skipped remove: $($memberToRemove.SamAccountName)")
