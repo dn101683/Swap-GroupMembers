@@ -10,7 +10,7 @@ PowerShell module for aligning Active Directory group membership to a required s
 
 - `GroupIdentity` - AD group to inspect and update
 - `AllowedMembers` - required suffix, either `T1` or `PUAM`
-- `RemoveUsers` - optional switch; when supplied, removes members whose `SamAccountName` does not end with the selected suffix
+- `RemoveUsers` - optional switch; when supplied, removes only managed suffix members (`.T1`/`.PUAM`) whose `SamAccountName` does not end with the selected suffix
 
 ### Behavior
 
@@ -18,6 +18,7 @@ PowerShell module for aligning Active Directory group membership to a required s
 - For each member, derives the base `SamAccountName` and attempts to add the matching suffixed account:
   - `AllowedMembers T1` -> `SAMACCOUNTNAME.T1`
   - `AllowedMembers PUAM` -> `SAMACCOUNTNAME.PUAM`
+- When `RemoveUsers` is supplied, removes only `.T1`/`.PUAM` members that do not match the selected suffix
 - Reports accounts that do not have a matching suffixed user in AD
 - Returns:
   - membership before

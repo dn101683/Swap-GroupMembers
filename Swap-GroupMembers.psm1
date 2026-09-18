@@ -13,11 +13,17 @@ function Update-ADGroupAllowedMembers {
 
     $suffix = ".$AllowedMembers"
     $recognizedSuffixes = @('.T1', '.PUAM')
+    $isWhatIf = [bool]$WhatIfPreference
     $actionsTaken = [System.Collections.Generic.List[string]]::new()
     $missingMatches = [System.Collections.Generic.List[string]]::new()
 
     $membersBefore = @(Get-ADGroupMember -Identity $GroupIdentity |
         Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
+    $simulatedMembersAfter = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($member in $membersBefore) {
+        $simulatedMembersAfter.Add($member)
+    }
 
     $currentSamAccountNames = @(
         $membersBefore |
@@ -58,32 +64,74 @@ function Update-ADGroupAllowedMembers {
 
         if ($PSCmdlet.ShouldProcess($GroupIdentity, "Add $targetSamAccountName")) {
             Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser
+            $actionsTaken.Add("Added: $targetSamAccountName")
+        }
+        else {
+            $actionsTaken.Add("Would add: $targetSamAccountName")
         }
 
-        $actionsTaken.Add("Added: $targetSamAccountName")
         $currentSamAccountNames += $targetSamAccountName
+        $simulatedMembersAfter.Add([pscustomobject]@{
+                Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
+                SamAccountName    = $targetSamAccountName
+                DistinguishedName = $matchedUser.DistinguishedName
+                ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
+            })
     }
 
     if ($RemoveUsers.IsPresent) {
         $membersToRemove = @(
             $membersBefore |
                 Where-Object {
-                    -not [string]::IsNullOrWhiteSpace($_.SamAccountName) -and
-                    -not $_.SamAccountName.EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)
+                    $memberSamAccountName = $_.SamAccountName
+
+                    if ([string]::IsNullOrWhiteSpace($memberSamAccountName)) {
+                        return $false
+                    }
+
+                    $hasManagedSuffix = $false
+
+                    foreach ($recognizedSuffix in $recognizedSuffixes) {
+                        if ($memberSamAccountName.EndsWith($recognizedSuffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            $hasManagedSuffix = $true
+                            break
+                        }
+                    }
+
+                    $hasManagedSuffix -and -not $memberSamAccountName.EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)
                 }
         )
 
         foreach ($memberToRemove in $membersToRemove) {
             if ($PSCmdlet.ShouldProcess($GroupIdentity, "Remove $($memberToRemove.SamAccountName)")) {
                 Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove -Confirm:$false
+                $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
+            }
+            else {
+                $actionsTaken.Add("Would remove: $($memberToRemove.SamAccountName)")
             }
 
-            $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
+            $memberIndex = -1
+            for ($index = 0; $index -lt $simulatedMembersAfter.Count; $index++) {
+                if ($simulatedMembersAfter[$index].SamAccountName -eq $memberToRemove.SamAccountName) {
+                    $memberIndex = $index
+                    break
+                }
+            }
+
+            if ($memberIndex -ge 0) {
+                $simulatedMembersAfter.RemoveAt($memberIndex)
+            }
         }
     }
 
-    $membersAfter = @(Get-ADGroupMember -Identity $GroupIdentity |
-        Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
+    if ($isWhatIf) {
+        $membersAfter = @($simulatedMembersAfter)
+    }
+    else {
+        $membersAfter = @(Get-ADGroupMember -Identity $GroupIdentity |
+            Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
+    }
 
     [pscustomobject]@{
         GroupIdentity   = $GroupIdentity
