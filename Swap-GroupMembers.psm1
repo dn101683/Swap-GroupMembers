@@ -31,6 +31,7 @@ function Update-ADGroupAllowedMembers {
     $isWhatIf = [bool]$WhatIfPreference
     $actionsTaken = [System.Collections.Generic.List[string]]::new()
     $missingMatches = [System.Collections.Generic.List[string]]::new()
+    $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $membersBefore = @(Get-ADGroupMember -Identity $GroupIdentity |
         Select-Object Name, SamAccountName, DistinguishedName, ObjectClass)
@@ -66,6 +67,10 @@ function Update-ADGroupAllowedMembers {
 
         if ($currentSamAccountNames -contains $targetSamAccountName) {
             $actionsTaken.Add("Already present: $targetSamAccountName")
+            continue
+        }
+
+        if (-not $processedTargetSamAccountNames.Add($targetSamAccountName)) {
             continue
         }
 
