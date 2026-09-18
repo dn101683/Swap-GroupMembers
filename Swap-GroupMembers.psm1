@@ -180,6 +180,7 @@ function Update-ADGroupAllowedMembers {
         }
 
         $matchedUser = $matchedUsers[0]
+        $matchedSamAccountName = $matchedUser.SamAccountName
 
         if ($currentMemberDistinguishedNames.Contains($matchedUser.DistinguishedName)) {
             $actionsTaken.Add("Already present: $targetSamAccountName")
@@ -190,12 +191,12 @@ function Update-ADGroupAllowedMembers {
             try {
                 Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser.DistinguishedName -ErrorAction Stop
                 $actionsTaken.Add("Added: $targetSamAccountName")
-                [void]$currentSamAccountNames.Add($targetSamAccountName)
+                [void]$currentSamAccountNames.Add($matchedSamAccountName)
                 [void]$currentMemberDistinguishedNames.Add($matchedUser.DistinguishedName)
-                if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
+                if (-not ($simulatedMembersAfter.SamAccountName -contains $matchedSamAccountName)) {
                     $simulatedMembersAfter.Add([pscustomobject]@{
                             Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
-                            SamAccountName    = $targetSamAccountName
+                            SamAccountName    = $matchedSamAccountName
                             DistinguishedName = $matchedUser.DistinguishedName
                             ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
                         })
@@ -207,10 +208,10 @@ function Update-ADGroupAllowedMembers {
         }
         elseif ($isWhatIf) {
             $actionsTaken.Add("Would add: $targetSamAccountName")
-            if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
+            if (-not ($simulatedMembersAfter.SamAccountName -contains $matchedSamAccountName)) {
                 $simulatedMembersAfter.Add([pscustomobject]@{
                         Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
-                        SamAccountName    = $targetSamAccountName
+                        SamAccountName    = $matchedSamAccountName
                         DistinguishedName = $matchedUser.DistinguishedName
                         ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
                     })
