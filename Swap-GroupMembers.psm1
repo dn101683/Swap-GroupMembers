@@ -182,18 +182,17 @@ function Update-ADGroupAllowedMembers {
         }
         elseif ($isWhatIf) {
             $actionsTaken.Add("Would add: $targetSamAccountName")
+            if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
+                $simulatedMembersAfter.Add([pscustomobject]@{
+                        Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
+                        SamAccountName    = $targetSamAccountName
+                        DistinguishedName = $matchedUser.DistinguishedName
+                        ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
+                    })
+            }
         }
         else {
             $actionsTaken.Add("Skipped add: $targetSamAccountName")
-        }
-
-        if ($isWhatIf -and -not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
-            $simulatedMembersAfter.Add([pscustomobject]@{
-                    Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
-                    SamAccountName    = $targetSamAccountName
-                    DistinguishedName = $matchedUser.DistinguishedName
-                    ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
-                })
         }
     }
 
