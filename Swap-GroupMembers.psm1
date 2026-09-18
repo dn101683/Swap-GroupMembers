@@ -29,7 +29,7 @@ function Update-ADGroupAllowedMembers {
     function Resolve-ADGroupMembers {
         param(
             [Parameter(Mandatory = $true)]
-            [string]$Identity
+            $Identity
         )
 
         $rawMembers = @(Get-ADGroupMember -Identity $Identity -ErrorAction Stop)
@@ -72,6 +72,25 @@ function Update-ADGroupAllowedMembers {
         }
     }
 
+    function Remove-SimulatedMember {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$SamAccountName
+        )
+
+        $memberIndex = -1
+        for ($index = 0; $index -lt $simulatedMembersAfter.Count; $index++) {
+            if ($simulatedMembersAfter[$index].SamAccountName -eq $SamAccountName) {
+                $memberIndex = $index
+                break
+            }
+        }
+
+        if ($memberIndex -ge 0) {
+            $simulatedMembersAfter.RemoveAt($memberIndex)
+        }
+    }
+
     $suffix = ".$AllowedMembers"
     $recognizedSuffixes = @('.T1', '.PUAM')
     $isWhatIf = [bool]$WhatIfPreference
@@ -79,8 +98,9 @@ function Update-ADGroupAllowedMembers {
     $missingMatches = [System.Collections.Generic.List[string]]::new()
     $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $resolvedUsersByDistinguishedName = @{}
+    $group = Get-ADGroup -Identity $GroupIdentity -ErrorAction Stop
 
-    $membersBeforeResult = Resolve-ADGroupMembers -Identity $GroupIdentity
+    $membersBeforeResult = Resolve-ADGroupMembers -Identity $group
     $membersBeforeRaw = $membersBeforeResult.RawMembers
     $membersBefore = $membersBeforeResult.ResolvedMembers
     $simulatedMembersAfter = [System.Collections.Generic.List[object]]::new()
@@ -89,11 +109,12 @@ function Update-ADGroupAllowedMembers {
         $simulatedMembersAfter.Add($member)
     }
 
-    $currentSamAccountNames = @(
-        $membersBefore |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_.SamAccountName) } |
-            ForEach-Object { $_.SamAccountName }
-    )
+    $currentSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($member in $membersBefore) {
+        if (-not [string]::IsNullOrWhiteSpace($member.SamAccountName)) {
+            [void]$currentSamAccountNames.Add($member.SamAccountName)
+        }
+    }
 
     foreach ($member in $membersBefore) {
         $samAccountName = $member.SamAccountName
@@ -113,7 +134,7 @@ function Update-ADGroupAllowedMembers {
 
         $targetSamAccountName = "$baseSamAccountName$suffix"
 
-        if ($currentSamAccountNames -contains $targetSamAccountName) {
+        if ($currentSamAccountNames.Contains($targetSamAccountName)) {
             $actionsTaken.Add("Already present: $targetSamAccountName")
             continue
         }
@@ -145,7 +166,7 @@ function Update-ADGroupAllowedMembers {
             try {
                 Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser -ErrorAction Stop
                 $actionsTaken.Add("Added: $targetSamAccountName")
-                $currentSamAccountNames += $targetSamAccountName
+                [void]$currentSamAccountNames.Add($targetSamAccountName)
                 if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
                     $simulatedMembersAfter.Add([pscustomobject]@{
                             Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
@@ -161,7 +182,7 @@ function Update-ADGroupAllowedMembers {
         }
         elseif ($isWhatIf) {
             $actionsTaken.Add("Would add: $targetSamAccountName")
-            $currentSamAccountNames += $targetSamAccountName
+            [void]$currentSamAccountNames.Add($targetSamAccountName)
         }
         else {
             $actionsTaken.Add("Skipped add: $targetSamAccountName")
@@ -205,17 +226,7 @@ function Update-ADGroupAllowedMembers {
                 try {
                     Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove.DistinguishedName -Confirm:$false -ErrorAction Stop
                     $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
-                    $memberIndex = -1
-                    for ($index = 0; $index -lt $simulatedMembersAfter.Count; $index++) {
-                        if ($simulatedMembersAfter[$index].SamAccountName -eq $memberToRemove.SamAccountName) {
-                            $memberIndex = $index
-                            break
-                        }
-                    }
-
-                    if ($memberIndex -ge 0) {
-                        $simulatedMembersAfter.RemoveAt($memberIndex)
-                    }
+                    Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
                 }
                 catch {
                     $actionsTaken.Add("Failed to remove: $($memberToRemove.SamAccountName)")
@@ -223,18 +234,7 @@ function Update-ADGroupAllowedMembers {
             }
             elseif ($isWhatIf) {
                 $actionsTaken.Add("Would remove: $($memberToRemove.SamAccountName)")
-
-                $memberIndex = -1
-                for ($index = 0; $index -lt $simulatedMembersAfter.Count; $index++) {
-                    if ($simulatedMembersAfter[$index].SamAccountName -eq $memberToRemove.SamAccountName) {
-                        $memberIndex = $index
-                        break
-                    }
-                }
-
-                if ($memberIndex -ge 0) {
-                    $simulatedMembersAfter.RemoveAt($memberIndex)
-                }
+                Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
             }
             else {
                 $actionsTaken.Add("Skipped remove: $($memberToRemove.SamAccountName)")
