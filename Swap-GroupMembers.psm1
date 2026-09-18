@@ -106,7 +106,7 @@ function Update-ADGroupAllowedMembers {
             $actionsTaken.Add("Skipped add: $targetSamAccountName")
         }
 
-        if ($isWhatIf) {
+        if ($isWhatIf -and -not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
             $simulatedMembersAfter.Add([pscustomobject]@{
                     Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
                     SamAccountName    = $targetSamAccountName
