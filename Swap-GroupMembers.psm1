@@ -137,6 +137,14 @@ function Update-ADGroupAllowedMembers {
                 Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser -ErrorAction Stop
                 $actionsTaken.Add("Added: $targetSamAccountName")
                 $currentSamAccountNames += $targetSamAccountName
+                if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
+                    $simulatedMembersAfter.Add([pscustomobject]@{
+                            Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
+                            SamAccountName    = $targetSamAccountName
+                            DistinguishedName = $matchedUser.DistinguishedName
+                            ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
+                        })
+                }
             }
             catch {
                 $actionsTaken.Add("Failed to add: $targetSamAccountName")
@@ -188,6 +196,17 @@ function Update-ADGroupAllowedMembers {
                 try {
                     Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove.DistinguishedName -Confirm:$false -ErrorAction Stop
                     $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
+                    $memberIndex = -1
+                    for ($index = 0; $index -lt $simulatedMembersAfter.Count; $index++) {
+                        if ($simulatedMembersAfter[$index].SamAccountName -eq $memberToRemove.SamAccountName) {
+                            $memberIndex = $index
+                            break
+                        }
+                    }
+
+                    if ($memberIndex -ge 0) {
+                        $simulatedMembersAfter.RemoveAt($memberIndex)
+                    }
                 }
                 catch {
                     $actionsTaken.Add("Failed to remove: $($memberToRemove.SamAccountName)")
@@ -214,12 +233,7 @@ function Update-ADGroupAllowedMembers {
         }
     }
 
-    if ($isWhatIf) {
-        $membersAfter = @($simulatedMembersAfter)
-    }
-    else {
-        $membersAfter = (Resolve-ADGroupMembers -Identity $GroupIdentity).ResolvedMembers
-    }
+    $membersAfter = @($simulatedMembersAfter)
 
     [pscustomobject]@{
         GroupIdentity   = $GroupIdentity
