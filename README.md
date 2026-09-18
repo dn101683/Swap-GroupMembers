@@ -22,6 +22,9 @@ PowerShell module for aligning Active Directory group membership to a required s
 - When `RemoveUsers` is supplied, removes only `.T1`/`.PUAM` members that do not match the selected suffix
 - Reports accounts that do not have a matching suffixed user in AD
 - Returns:
+  - group identity
+  - selected allowed member suffix
+  - whether removal mode was enabled
   - membership before
   - actions taken
   - missing matching accounts

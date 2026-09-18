@@ -32,15 +32,23 @@ function Update-ADGroupAllowedMembers {
             [string]$Identity
         )
 
-        $rawMembers = @(Get-ADGroupMember -Identity $Identity)
+        $rawMembers = @(Get-ADGroupMember -Identity $Identity -ErrorAction Stop)
         $resolvedMembers = foreach ($rawMember in $rawMembers) {
             $memberName = $rawMember.Name
             $memberSamAccountName = $rawMember.SamAccountName
             $memberDistinguishedName = $rawMember.DistinguishedName
             $memberObjectClass = $rawMember.ObjectClass
 
-            if ([string]::IsNullOrWhiteSpace($memberSamAccountName) -and -not [string]::IsNullOrWhiteSpace($memberDistinguishedName)) {
-                $resolvedUser = Get-ADUser -Identity $memberDistinguishedName -Properties SamAccountName, Name, DistinguishedName, ObjectClass -ErrorAction SilentlyContinue
+            if (
+                [string]::IsNullOrWhiteSpace($memberSamAccountName) -and
+                -not [string]::IsNullOrWhiteSpace($memberDistinguishedName) -and
+                $memberObjectClass -eq 'user'
+            ) {
+                if (-not $resolvedUsersByDistinguishedName.ContainsKey($memberDistinguishedName)) {
+                    $resolvedUsersByDistinguishedName[$memberDistinguishedName] = Get-ADUser -Identity $memberDistinguishedName -Properties SamAccountName, Name, DistinguishedName, ObjectClass -ErrorAction SilentlyContinue
+                }
+
+                $resolvedUser = $resolvedUsersByDistinguishedName[$memberDistinguishedName]
 
                 if ($null -ne $resolvedUser) {
                     $memberName = $resolvedUser.Name
@@ -70,6 +78,7 @@ function Update-ADGroupAllowedMembers {
     $actionsTaken = [System.Collections.Generic.List[string]]::new()
     $missingMatches = [System.Collections.Generic.List[string]]::new()
     $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $resolvedUsersByDistinguishedName = @{}
 
     $membersBeforeResult = Resolve-ADGroupMembers -Identity $GroupIdentity
     $membersBeforeRaw = $membersBeforeResult.RawMembers
