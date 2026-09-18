@@ -97,6 +97,7 @@ function Update-ADGroupAllowedMembers {
     $actionsTaken = [System.Collections.Generic.List[string]]::new()
     $missingMatches = [System.Collections.Generic.List[string]]::new()
     $processedTargetSamAccountNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $currentMemberDistinguishedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $resolvedUsersByDistinguishedName = @{}
     $group = Get-ADGroup -Identity $GroupIdentity -ErrorAction Stop
 
@@ -113,6 +114,10 @@ function Update-ADGroupAllowedMembers {
     foreach ($member in $membersBefore) {
         if (-not [string]::IsNullOrWhiteSpace($member.SamAccountName)) {
             [void]$currentSamAccountNames.Add($member.SamAccountName)
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($member.DistinguishedName)) {
+            [void]$currentMemberDistinguishedNames.Add($member.DistinguishedName)
         }
     }
 
@@ -162,11 +167,17 @@ function Update-ADGroupAllowedMembers {
 
         $matchedUser = $matchedUsers[0]
 
+        if ($currentMemberDistinguishedNames.Contains($matchedUser.DistinguishedName)) {
+            $actionsTaken.Add("Already present: $targetSamAccountName")
+            continue
+        }
+
         if ($PSCmdlet.ShouldProcess($GroupIdentity, "Add $targetSamAccountName")) {
             try {
                 Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser.DistinguishedName -ErrorAction Stop
                 $actionsTaken.Add("Added: $targetSamAccountName")
                 [void]$currentSamAccountNames.Add($targetSamAccountName)
+                [void]$currentMemberDistinguishedNames.Add($matchedUser.DistinguishedName)
                 if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
                     $simulatedMembersAfter.Add([pscustomobject]@{
                             Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
