@@ -70,18 +70,33 @@ function Update-ADGroupAllowedMembers {
         }
 
         $targetSamAccountNameLdapValue = ConvertTo-LdapFilterValue -Value $targetSamAccountName
-        $matchedUser = Get-ADUser -LDAPFilter "(sAMAccountName=$targetSamAccountNameLdapValue)" -ErrorAction SilentlyContinue
+        $matchedUsers = @(
+            Get-ADUser -LDAPFilter "(sAMAccountName=$targetSamAccountNameLdapValue)" -ErrorAction SilentlyContinue |
+                Where-Object { $null -ne $_ }
+        )
 
-        if ($null -eq $matchedUser) {
+        if ($matchedUsers.Count -eq 0) {
             $missingMatches.Add($targetSamAccountName)
             $actionsTaken.Add("Missing matching account: $targetSamAccountName")
             continue
         }
 
+        if ($matchedUsers.Count -gt 1) {
+            $actionsTaken.Add("Ambiguous matching account: $targetSamAccountName")
+            continue
+        }
+
+        $matchedUser = $matchedUsers[0]
+
         if ($PSCmdlet.ShouldProcess($GroupIdentity, "Add $targetSamAccountName")) {
-            Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser
-            $actionsTaken.Add("Added: $targetSamAccountName")
-            $currentSamAccountNames += $targetSamAccountName
+            try {
+                Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser -ErrorAction Stop
+                $actionsTaken.Add("Added: $targetSamAccountName")
+                $currentSamAccountNames += $targetSamAccountName
+            }
+            catch {
+                $actionsTaken.Add("Failed to add: $targetSamAccountName")
+            }
         }
         elseif ($isWhatIf) {
             $actionsTaken.Add("Would add: $targetSamAccountName")
@@ -126,8 +141,13 @@ function Update-ADGroupAllowedMembers {
 
         foreach ($memberToRemove in $membersToRemove) {
             if ($PSCmdlet.ShouldProcess($GroupIdentity, "Remove $($memberToRemove.SamAccountName)")) {
-                Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove -Confirm:$false
-                $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
+                try {
+                    Remove-ADGroupMember -Identity $GroupIdentity -Members $memberToRemove -Confirm:$false -ErrorAction Stop
+                    $actionsTaken.Add("Removed: $($memberToRemove.SamAccountName)")
+                }
+                catch {
+                    $actionsTaken.Add("Failed to remove: $($memberToRemove.SamAccountName)")
+                }
             }
             elseif ($isWhatIf) {
                 $actionsTaken.Add("Would remove: $($memberToRemove.SamAccountName)")
