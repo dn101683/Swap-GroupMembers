@@ -105,6 +105,21 @@ function Update-ADGroupAllowedMembers {
         Remove-SimulatedMember -SamAccountName $SamAccountName
     }
 
+    function Get-NamingContextFromDistinguishedName {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$DistinguishedName
+        )
+
+        $namingContextMatch = [regex]::Match($DistinguishedName, '(?i)(DC=.*)$')
+
+        if (-not $namingContextMatch.Success) {
+            return $DistinguishedName
+        }
+
+        $namingContextMatch.Groups[1].Value
+    }
+
     $suffix = ".$AllowedMembers"
     $recognizedSuffixes = @('.T1', '.PUAM')
     $isWhatIf = [bool]$WhatIfPreference
@@ -114,6 +129,7 @@ function Update-ADGroupAllowedMembers {
     $currentMemberDistinguishedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $resolvedUsersByDistinguishedName = @{}
     $group = Get-ADGroup -Identity $GroupIdentity -ErrorAction Stop
+    $groupNamingContext = Get-NamingContextFromDistinguishedName -DistinguishedName $group.DistinguishedName
 
     $membersBeforeResult = Resolve-ADGroupMembers -Identity $group
     $membersBeforeRaw = $membersBeforeResult.RawMembers
@@ -164,18 +180,13 @@ function Update-ADGroupAllowedMembers {
 
         $targetSamAccountNameLdapValue = ConvertTo-LdapFilterValue -Value $targetSamAccountName
         $matchedUsers = @(
-            Get-ADUser -LDAPFilter "(sAMAccountName=$targetSamAccountNameLdapValue)" -ErrorAction SilentlyContinue |
+            Get-ADUser -LDAPFilter "(sAMAccountName=$targetSamAccountNameLdapValue)" -SearchBase $groupNamingContext -ErrorAction SilentlyContinue |
                 Where-Object { $null -ne $_ }
         )
 
         if ($matchedUsers.Count -eq 0) {
             $missingMatches.Add($targetSamAccountName)
             $actionsTaken.Add("Missing matching account: $targetSamAccountName")
-            continue
-        }
-
-        if ($matchedUsers.Count -gt 1) {
-            $actionsTaken.Add("Ambiguous matching account: $targetSamAccountName")
             continue
         }
 
