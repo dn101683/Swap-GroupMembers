@@ -164,7 +164,7 @@ function Update-ADGroupAllowedMembers {
 
         if ($PSCmdlet.ShouldProcess($GroupIdentity, "Add $targetSamAccountName")) {
             try {
-                Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser -ErrorAction Stop
+                Add-ADGroupMember -Identity $GroupIdentity -Members $matchedUser.DistinguishedName -ErrorAction Stop
                 $actionsTaken.Add("Added: $targetSamAccountName")
                 [void]$currentSamAccountNames.Add($targetSamAccountName)
                 if (-not ($simulatedMembersAfter.SamAccountName -contains $targetSamAccountName)) {
