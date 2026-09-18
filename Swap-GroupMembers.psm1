@@ -257,7 +257,7 @@ function Update-ADGroupAllowedMembers {
             }
             elseif ($isWhatIf) {
                 $actionsTaken.Add("Would remove: $($memberToRemove.SamAccountName)")
-                Remove-TrackedMember -SamAccountName $memberToRemove.SamAccountName -DistinguishedName $memberToRemove.DistinguishedName
+                Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
             }
             else {
                 $actionsTaken.Add("Skipped remove: $($memberToRemove.SamAccountName)")
