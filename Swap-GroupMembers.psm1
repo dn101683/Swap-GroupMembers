@@ -174,11 +174,6 @@ function Update-ADGroupAllowedMembers {
             continue
         }
 
-        if ($matchedUsers.Count -gt 1) {
-            $actionsTaken.Add("Ambiguous matching account: $targetSamAccountName")
-            continue
-        }
-
         $matchedUser = $matchedUsers[0]
         $matchedSamAccountName = $matchedUser.SamAccountName
 
