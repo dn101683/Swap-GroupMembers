@@ -182,7 +182,6 @@ function Update-ADGroupAllowedMembers {
         }
         elseif ($isWhatIf) {
             $actionsTaken.Add("Would add: $targetSamAccountName")
-            [void]$currentSamAccountNames.Add($targetSamAccountName)
         }
         else {
             $actionsTaken.Add("Skipped add: $targetSamAccountName")
