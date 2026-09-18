@@ -230,14 +230,6 @@ function Update-ADGroupAllowedMembers {
         }
         else {
             $actionsTaken.Add("Skipped add: $targetSamAccountName")
-            if (-not ($simulatedMembersAfter.SamAccountName -contains $matchedSamAccountName)) {
-                $simulatedMembersAfter.Add([pscustomobject]@{
-                        Name              = if ($matchedUser.PSObject.Properties.Name -contains 'Name') { $matchedUser.Name } else { $targetSamAccountName }
-                        SamAccountName    = $matchedSamAccountName
-                        DistinguishedName = $matchedUser.DistinguishedName
-                        ObjectClass       = if ($matchedUser.PSObject.Properties.Name -contains 'ObjectClass') { $matchedUser.ObjectClass } else { 'user' }
-                    })
-            }
         }
     }
 
@@ -281,7 +273,6 @@ function Update-ADGroupAllowedMembers {
             }
             else {
                 $actionsTaken.Add("Skipped remove: $($memberToRemove.SamAccountName)")
-                Remove-SimulatedMember -SamAccountName $memberToRemove.SamAccountName
             }
         }
     }

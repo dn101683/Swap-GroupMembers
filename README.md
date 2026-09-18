@@ -30,7 +30,7 @@ PowerShell module for aligning Active Directory group membership to a required s
   - membership before
   - actions taken
   - missing matching accounts
-  - membership after
+  - computed membership after (including `-WhatIf` simulation)
 
 ### Example
 
